@@ -171,14 +171,14 @@ sonuç tablosu ve **CSV / JSON indir** butonları çıkar. Sağ sütunda son iş
 
 ```bash
 # Ürün listesi çek, 3 sayfa, bitince CSV'ye yaz
-curl -X POST localhost:3050/api/scrape \
+curl -sS -X POST localhost:3050/api/scrape \
   -H 'Content-Type: application/json' \
   -d '{"url":"https://site.com/urunler","type":"list",
        "options":{"maxPages":3,"itemSelector":".product-card"},
        "export":"csv"}'
 
 # Senkron çalıştır (curl / cron için)
-curl -X POST 'localhost:3050/api/scrape?wait=1' \
+curl -sS -X POST 'localhost:3050/api/scrape?wait=1' \
   -H 'Content-Type: application/json' \
   -d '{"url":"https://site.com/iletisim","type":"leads"}'
 ```
@@ -412,12 +412,13 @@ hazır gelir), root olmayan `pwuser` ile çalışır, `/data` volume'una yazar v
 - **Sayfa boş dönüyor** → İçerik JavaScript ile geliyordur: `scroll_to_bottom: true` ve/veya `wait_for_selector` ekle.
 - **"Could not auto-detect a repeating item selector"** veya yanlış satırlar → önce sayfayı incelet:
   ```bash
-  curl -s -X POST 'localhost:3050/api/scrape?wait=1' -H 'Content-Type: application/json' \
+  curl -sS -X POST 'localhost:3050/api/scrape?wait=1' -H 'Content-Type: application/json' \
     -d '{"url":"https://site.com/kategori","type":"inspect"}'
   ```
   Dönen listede aday seçiciler; her biri için kaç öğe bulunduğu, kaçında link/görsel/fiyat olduğu ve örnek metinler yazar. En üsttekini `item_selector` olarak ver. Hiçbiri iyi puan almazsa liste JavaScript ile geliyordur: `"scrollToBottom":true` ve `"waitForSelector"` ekle.
 - **Claude araçları görmüyor** → `build/index.js` yolunun mutlak olduğundan ve `npm run build` çalıştırıldığından emin ol, sonra Claude Desktop'ı tamamen kapatıp aç.
 - **Sunucu logları** → MCP sunucusu stdout'u protokol için kullanır; tüm loglar stderr'e yazılır (Claude Desktop → MCP log dosyaları). Web sunucusunda `pm2 logs web-scraper` ya da `docker compose logs -f`.
+- **`curl -s` hiçbir şey yazmıyor** → `-s` hata mesajlarını da susturur; `-sS` kullan. Servisi yeni yeniden başlattıysan port bir an için kapalı olabilir (kurulum betiği artık hazır olana kadar bekler; eski unit'i `./deploy/install-systemd.sh --force` ile yenile).
 - **Panel "bağlantı yok" diyor** → API token ayarlıysa "Gelişmiş ayarlar → API token" alanına gir; ayrıca `curl localhost:3050/api/health` ile sunucunun ayakta olduğunu doğrula.
 - **Sunucuda "Host system is missing dependencies"** → yukarıdaki `install-deps` adımını çalıştır (ya da Docker kurulumunu kullan).
 

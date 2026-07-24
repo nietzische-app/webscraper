@@ -33,6 +33,9 @@ if [[ ! -f "$APP_DIR/build/server.js" ]]; then
   exit 1
 fi
 
+# 0.0.0.0 is not an address you can connect to; probe loopback instead.
+HEALTH_HOST="$([[ "$HOST" == "0.0.0.0" || "$HOST" == "::" ]] && echo "127.0.0.1" || echo "$HOST")"
+
 # Playwright caches browsers per user; systemd needs HOME set to find them.
 HOME_DIR="$(getent passwd "$RUN_AS" | cut -d: -f6)"
 HOME_DIR="${HOME_DIR:-$HOME}"
@@ -49,8 +52,13 @@ Type=simple
 User=$RUN_AS
 WorkingDirectory=$APP_DIR
 ExecStart=$NODE_BIN $APP_DIR/build/server.js
+# Type=simple reports "started" as soon as the process is exec'd, so a
+# "systemctl restart && curl" one-liner would race the port. Hold the start
+# until /api/health answers (or give up after ~30s).
+ExecStartPost=/bin/sh -c 'command -v curl >/dev/null || exit 0; for i in \$(seq 1 60); do curl -sf http://$HEALTH_HOST:$PORT/api/health >/dev/null 2>&1 && exit 0; sleep 0.5; done; exit 1'
 Restart=on-failure
 RestartSec=5
+TimeoutStartSec=60
 
 Environment=NODE_ENV=production
 Environment=HOME=$HOME_DIR
