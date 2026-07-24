@@ -38,6 +38,7 @@ const HOST = process.env.HOST ?? "0.0.0.0";
 const API_TOKEN = process.env.SCRAPER_API_TOKEN?.trim() ?? "";
 const MAX_CONCURRENT_JOBS = Math.max(1, Number.parseInt(process.env.SCRAPER_MAX_CONCURRENT_JOBS ?? "2", 10));
 const MAX_JOBS_KEPT = Math.max(10, Number.parseInt(process.env.SCRAPER_MAX_JOBS_KEPT ?? "100", 10));
+const CORS_ORIGIN = process.env.SCRAPER_CORS_ORIGIN?.trim() || "*";
 
 /* -------------------------------------------------------------------------- */
 /* Job store                                                                  */
@@ -337,6 +338,21 @@ export function createApp(): express.Express {
   app.use((_req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "no-referrer");
+    next();
+  });
+
+  // CORS lets public/index.html work when opened straight from disk (file://,
+  // whose Origin is "null") against a server elsewhere. It does not weaken the
+  // token: an attacker's page still cannot read a token it does not have, and
+  // an open port with no token is reachable directly anyway. Pin it with
+  // SCRAPER_CORS_ORIGIN when the panel is served from one known origin.
+  app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+    res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-API-Token, Authorization");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Max-Age", "86400");
+    if (req.method === "OPTIONS") return res.sendStatus(204);
     next();
   });
 

@@ -21,6 +21,32 @@ tarayıcısı (Playwright) çalıştırır ve **iki arayüz** sunar:
 
 ---
 
+## En basit yol: kendi bilgisayarında çalıştır
+
+Sunucuya, SSH'a, port açmaya gerek yok. Node.js 20+ kurulu olsun, yeter:
+
+```bash
+git clone <repo-url> webscraper
+cd webscraper
+npm install && npm run build
+npm run serve
+```
+
+Tarayıcında **http://localhost:3050** — panel hazır. Kazınan dosyalar
+`~/scraper-output` klasörüne düşer.
+
+Sunucuya kurmak yalnızca şu durumlarda gerekir: bilgisayarın kapalıyken de
+kazıma yapılacaksa, zamanlanmış (cron) işler varsa veya sunucunun IP'sinden
+çıkmak istiyorsan.
+
+> **Not:** `public/index.html` tek başına kazıma yapamaz — o sadece arayüzdür.
+> Kazımayı yapan, gerçek bir Chromium tarayıcısı süren Node sunucusudur
+> (`npm run serve`). Dosyayı diskten açarsan panel sana ne yapman gerektiğini
+> söyler; çalışan bir sunucun varsa "Gelişmiş ayarlar → Sunucu adresi" alanına
+> `http://SUNUCU_IP:3050` yazarak ona bağlanabilirsin.
+
+---
+
 ## Kurulum
 
 ```bash
@@ -38,7 +64,7 @@ export SCRAPER_CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Googl
 ```
 
 Testleri çalıştır (internet gerekmez, yerel bir test fixture sitesi ayağa kaldırılır —
-kütüphane, MCP protokolü, HTTP API, token doğrulaması ve panel arayüzü dahil 40 test):
+kütüphane, MCP protokolü, HTTP API, token doğrulaması ve panel arayüzü dahil 45 test):
 
 ```bash
 npm run smoke
@@ -358,6 +384,7 @@ hazır gelir), root olmayan `pwuser` ile çalışır, `/data` volume'una yazar v
 | `SCRAPER_API_TOKEN` | — | Ayarlıysa tüm `/api/*` çağrıları token ister |
 | `SCRAPER_MAX_CONCURRENT_JOBS` | `2` | Aynı anda çalışacak kazıma işi sayısı |
 | `SCRAPER_MAX_JOBS_KEPT` | `100` | Bellekte tutulan iş geçmişi |
+| `SCRAPER_CORS_ORIGIN` | `*` | `/api/*` için izin verilen origin; paneli diskten açabilmek için `*` gerekir |
 | `SCRAPER_OUTPUT_DIR` | `~/scraper-output` | Göreli dosya yollarının kaydedileceği klasör |
 | `SCRAPER_CHROME_PATH` | — | Playwright yerine kullanılacak Chrome/Chromium binary'si |
 | `SCRAPER_BROWSER_CHANNEL` | — | `chrome`, `msedge` gibi kurulu bir kanal |
