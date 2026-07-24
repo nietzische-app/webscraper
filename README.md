@@ -274,6 +274,42 @@ Unit `MemoryMax=2G` ve `TasksMax=512` ile sınırlıdır; Chromium diğer
 servislerini etkilemez. `TimeoutStopSec=20` tarayıcının düzgün kapanmasına
 zaman tanır.
 
+### Panele erişim — SSH tünelin yoksa
+
+Servis varsayılan olarak `127.0.0.1`'e bağlıdır, yani dışarıdan erişilemez.
+Laptop'undan SSH tüneli kuramıyorsan (`ssh -L …` parola soruyorsa anahtarın
+sunucuda tanımlı değildir) iki alternatif var.
+
+**A) Portu yalnızca kendi IP'ne aç** — en hızlısı:
+
+```bash
+# 1. Güçlü bir token üret ve NOT AL (panele bir kez gireceksin):
+TOKEN=$(openssl rand -hex 32); echo "$TOKEN"
+
+# 2. Servisi dışarı bağlı + token korumalı olarak yeniden kur:
+HOST=0.0.0.0 SCRAPER_API_TOKEN="$TOKEN" ./deploy/install-systemd.sh --force
+
+# 3. Firewall'ı YALNIZCA kendi IP'ne aç (IP'ni öğren: tarayıcıda ifconfig.me):
+ufw allow from <SENIN_IP> to any port 3050 proto tcp
+ufw status
+```
+
+Sonra tarayıcıda `http://<SUNUCU_IP>:3050`, "Gelişmiş ayarlar → API token"
+alanına token'ı yapıştır (tarayıcında saklanır, bir daha sorulmaz).
+
+Hetzner Cloud Firewall da kullanıyorsan 3050'yi web panelinden de açman gerekir.
+Bağlantı düz HTTP olduğu için token şifresiz gider; IP kısıtı bunu kabul
+edilebilir kılar, ama kalıcı kurulumda (B) daha doğrudur.
+
+**B) Mevcut nginx'in arkasına al** — sunucunda alan adı + TLS varsa en temizi;
+yukarıdaki nginx bloğunu kullan, servis `127.0.0.1`'de kalır, şifreleme ve
+Basic Auth nginx'ten gelir.
+
+**SSH tünelini düzeltmek** istersen: laptop'unda `ssh-keygen -t ed25519`
+çalıştır, `~/.ssh/id_ed25519.pub` içeriğini kopyala ve sunucudaki (çalışan
+konsolunda) `~/.ssh/authorized_keys` dosyasına ekle. Sonra `ssh -L` parola
+sormadan çalışır ve hiçbir port açmana gerek kalmaz.
+
 ### PM2
 
 PM2 kurulu değilse: `npm install -g pm2` (global bir npm paketi ekler).

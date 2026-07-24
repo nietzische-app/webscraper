@@ -86,13 +86,15 @@ if [[ "$(id -u)" != "0" ]]; then
 fi
 
 unit_path="/etc/systemd/system/${SERVICE_NAME}.service"
-if [[ -e "$unit_path" ]]; then
-  echo "$unit_path already exists. Remove it first, or set SERVICE_NAME to something else." >&2
+if [[ -e "$unit_path" && "${1:-}" != "--force" ]]; then
+  echo "$unit_path already exists." >&2
+  echo "Pass --force to replace it (e.g. to change PORT/HOST/token), or set SERVICE_NAME." >&2
   exit 1
 fi
 
 printf '%s\n' "$unit" > "$unit_path"
-chmod 644 "$unit_path"
+# The unit embeds the API token, so keep it unreadable to other local users.
+chmod "$( [[ -n "$API_TOKEN" ]] && echo 600 || echo 644 )" "$unit_path"
 
 systemctl daemon-reload
 systemctl enable --now "$SERVICE_NAME"
