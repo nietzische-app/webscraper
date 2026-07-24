@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "web-scraper": {
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/webscraper/build/index.js"],
+      "env": {
+        "SCRAPER_OUTPUT_DIR": "/ABSOLUTE/PATH/TO/scraper-output",
+        "SCRAPER_LOCALE": "tr-TR",
+        "SCRAPER_TIMEZONE": "Europe/Istanbul"
+      }
+    }
+  }
+}

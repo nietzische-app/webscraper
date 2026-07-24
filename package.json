@@ -1,0 +1,45 @@
+{
+  "name": "universal-web-scraper-mcp",
+  "version": "1.0.0",
+  "description": "Universal Web Scraper MCP server: Playwright-backed page scraping, lead extraction, structured list/table extraction, image downloading and CSV/JSON export over the Model Context Protocol.",
+  "type": "module",
+  "main": "build/index.js",
+  "bin": {
+    "universal-web-scraper-mcp": "build/index.js"
+  },
+  "files": [
+    "build"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', 0o755)\"",
+    "start": "node build/index.js",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "postinstall": "playwright install chromium || echo \"Chromium download failed - run 'npx playwright install chromium' manually or set SCRAPER_CHROME_PATH\"",
+    "smoke": "node --test test/*.test.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "scraper",
+    "playwright",
+    "claude",
+    "cursor"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "cheerio": "^1.2.0",
+    "csv-writer": "^1.6.0",
+    "playwright": "^1.61.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}
