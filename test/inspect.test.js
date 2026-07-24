@@ -93,3 +93,20 @@ test("prices parse in both Turkish and English formats", async () => {
     assert.equal(parsePriceValue(input), expected, `parsePriceValue(${JSON.stringify(input)})`);
   }
 });
+
+test("currency symbols normalise to ISO codes", async () => {
+  const { detectCurrency } = await import("../build/scraper.js");
+  const cases = [
+    ["₺ 2,999.00", "TRY"],   // the symbol paen.com uses
+    ["1.499,50 ₺", "TRY"],
+    ["250,00 TL", "TRY"],
+    ["$199.99", "USD"],
+    ["€49,90", "EUR"],
+    ["£19.99", "GBP"],
+    ["1.299,00 TRY", "TRY"],
+    ["no price here", null],
+  ];
+  for (const [input, expected] of cases) {
+    assert.equal(detectCurrency(input), expected, `detectCurrency(${JSON.stringify(input)})`);
+  }
+});

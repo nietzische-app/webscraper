@@ -809,9 +809,33 @@ export function parsePriceValue(raw: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-function detectCurrency(raw: string): string | null {
+/** Symbols and local names both map to an ISO code, so the column stays sortable. */
+const CURRENCY_CODES: Record<string, string> = {
+  "₺": "TRY",
+  TL: "TRY",
+  TRY: "TRY",
+  $: "USD",
+  USD: "USD",
+  "€": "EUR",
+  EUR: "EUR",
+  "£": "GBP",
+  GBP: "GBP",
+  "¥": "JPY",
+  JPY: "JPY",
+  "₽": "RUB",
+  RUB: "RUB",
+  "₹": "INR",
+  INR: "INR",
+  CHF: "CHF",
+  SEK: "SEK",
+  PLN: "PLN",
+};
+
+export function detectCurrency(raw: string): string | null {
   const match = raw.match(new RegExp(CURRENCY_TOKENS, "i"));
-  return match ? match[0].toUpperCase().replace("TL", "TRY") : null;
+  if (!match) return null;
+  const token = match[0].toUpperCase();
+  return CURRENCY_CODES[token] ?? CURRENCY_CODES[match[0]] ?? token;
 }
 
 /** Picks the largest image from a srcset descriptor list. */
