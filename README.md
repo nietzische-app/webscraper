@@ -245,7 +245,38 @@ paketlerin üzerine yazmaz, sadece eksikleri ekler. Sisteme hiç paket
 kurmak istemiyorsan bunun yerine **Docker kurulumunu kullan** — kütüphaneler
 imajın içinde gelir, host'a dokunulmaz.
 
+Üç seçenekten birini kullan: **systemd** (ek paket kurmaz, önerilen),
+**PM2** (zaten kullanıyorsan) veya **Docker**.
+
+### systemd — ek paket gerektirmez
+
+systemd her sunucuda zaten kuruludur. Betik `node`'un mutlak yolunu kendisi
+bulur (systemd minimal bir PATH ile çalışır, nvm/nodesource kurulumunu göremez):
+
+```bash
+# Önce ne kurulacağını gör — hiçbir şey yazmaz:
+./deploy/install-systemd.sh --print
+
+# Kur, etkinleştir ve başlat:
+./deploy/install-systemd.sh
+```
+
+```bash
+systemctl status webscraper          # durum
+journalctl -u webscraper -f          # canlı log
+systemctl restart webscraper         # yeniden başlat
+systemctl disable --now webscraper && rm /etc/systemd/system/webscraper.service && systemctl daemon-reload   # tamamen kaldır
+```
+
+Ayarları değiştirmek için betiği ortam değişkenleriyle çağır:
+`PORT=3060 SCRAPER_API_TOKEN=xxx ./deploy/install-systemd.sh`.
+Unit `MemoryMax=2G` ve `TasksMax=512` ile sınırlıdır; Chromium diğer
+servislerini etkilemez. `TimeoutStopSec=20` tarayıcının düzgün kapanmasına
+zaman tanır.
+
 ### PM2
+
+PM2 kurulu değilse: `npm install -g pm2` (global bir npm paketi ekler).
 
 ```bash
 pm2 start ecosystem.config.cjs
