@@ -115,10 +115,26 @@ export class BrowserManager {
       })
       .catch((err) => {
         this.launching = null;
+        const message = err instanceof Error ? err.message : String(err);
+
+        // "libnspr4.so: cannot open shared object file" means the browser IS
+        // downloaded but the OS is missing the libraries it links against —
+        // a different fix from "the browser was never downloaded".
+        if (/cannot open shared object file|error while loading shared libraries/.test(message)) {
+          const missing = message.match(/([\w.+-]+\.so[\w.]*): cannot open shared object file/)?.[1];
+          throw new Error(
+            `Chromium is installed but the system is missing the libraries it needs${missing ? ` (first one: ${missing})` : ""}. ` +
+              'Install them once with "sudo npx playwright install-deps chromium" ' +
+              '(preview what apt would install first with "npx playwright install-deps --dry-run chromium"), ' +
+              "or run the app via Docker, which ships them. Original error: " +
+              message,
+          );
+        }
+
         throw new Error(
           'Chromium could not be launched. Run "npx playwright install chromium" once, or set ' +
             "SCRAPER_CHROME_PATH to an existing Chrome binary. Original error: " +
-            (err instanceof Error ? err.message : String(err)),
+            message,
         );
       });
 

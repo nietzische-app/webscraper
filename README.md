@@ -223,9 +223,23 @@ cd webscraper
 npm install
 npm run build
 
-# 4. Testleri çalıştır — internet gerektirmez, doğru kurulduğunu kanıtlar
+# 4. Chromium'un sistem kütüphanelerini kur — ATLANMAZ.
+#    Önce ne kurulacağını gör (hiçbir şey kurmaz):
+npx playwright install-deps --dry-run chromium
+#    Sonra kur:
+sudo npx playwright install-deps chromium
+
+# 5. Testleri çalıştır — internet gerektirmez, doğru kurulduğunu kanıtlar
 npm run smoke
 ```
+
+**4. adımı atlarsan** Chromium indirilir ama başlatılamaz; testlerin tarayıcı
+gerektiren kısmı `libnspr4.so: cannot open shared object file` ile düşer.
+Bunlar Chromium'un ihtiyaç duyduğu standart paylaşımlı kütüphanelerdir
+(`libnspr4`, `libnss3`, `libatk1.0-0`, `libgbm1`, `libasound2` …); mevcut
+paketlerin üzerine yazmaz, sadece eksikleri ekler. Sisteme hiç paket
+kurmak istemiyorsan bunun yerine **Docker kurulumunu kullan** — kütüphaneler
+imajın içinde gelir, host'a dokunulmaz.
 
 ### PM2
 
@@ -286,6 +300,7 @@ hazır gelir), root olmayan `pwuser` ile çalışır, `/data` volume'una yazar v
 ## Sorun giderme
 
 - **"Chromium could not be launched"** → `npx playwright install chromium` çalıştır ya da `SCRAPER_CHROME_PATH` ayarla.
+- **"Chromium is installed but the system is missing the libraries it needs"** / `libnspr4.so: cannot open shared object file` → `sudo npx playwright install-deps chromium` (ya da Docker kurulumu). Tarayıcı inmiş ama işletim sisteminde bağımlı olduğu kütüphaneler yok.
 - **Sayfa boş dönüyor** → İçerik JavaScript ile geliyordur: `scroll_to_bottom: true` ve/veya `wait_for_selector` ekle.
 - **Yanlış satırlar çıkıyor** → `item_selector`'ı elle ver; tarayıcıda "İncele" ile ürün kartının class'ına bak.
 - **Claude araçları görmüyor** → `build/index.js` yolunun mutlak olduğundan ve `npm run build` çalıştırıldığından emin ol, sonra Claude Desktop'ı tamamen kapatıp aç.
