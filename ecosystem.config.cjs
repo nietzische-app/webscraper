@@ -26,7 +26,8 @@ module.exports = {
         PORT: 3050,
         // Bind to loopback and put nginx in front, or set 0.0.0.0 + a token.
         HOST: "127.0.0.1",
-        SCRAPER_OUTPUT_DIR: `${process.env.HOME || "/root"}/scraper-output`,
+        // Everything this app writes stays inside its own directory.
+        SCRAPER_OUTPUT_DIR: require("node:path").join(__dirname, "scraper-output"),
         SCRAPER_MAX_CONCURRENT_JOBS: 2,
         SCRAPER_LOCALE: "tr-TR",
         SCRAPER_TIMEZONE: "Europe/Istanbul",

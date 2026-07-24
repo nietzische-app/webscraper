@@ -192,14 +192,53 @@ location /scraper/ {
 
 ## Sunucuda çalıştırma (Hetzner)
 
+### Sunucudaki diğer projelere dokunmaz — neyin nereye yazıldığı
+
+| Ne | Nereye | Etki |
+| --- | --- | --- |
+| Kod + `node_modules` + `build/` | Klonladığın klasör | Sadece o klasör |
+| Kazınan dosyalar | `SCRAPER_OUTPUT_DIR` (PM2 config'inde proje içi `scraper-output/`) | Sadece o klasör |
+| PM2 logları | `<proje>/logs/` | Sadece o klasör |
+| Chromium (~150 MB) | `~/.cache/ms-playwright` | Ortak önbellek, yalnızca ekleme yapar |
+| Ağ | Tek port (`PORT`, varsayılan 3050), `127.0.0.1`'e bağlı | Başka port dinlemez |
+
+Sistem geneline dokunan **tek** komut `npx playwright install-deps chromium`'dur:
+Chromium'un ihtiyaç duyduğu paylaşımlı kütüphaneleri (`libnss3`, `libatk` vb.)
+`apt` ile kurar. Bunu hiç çalıştırmak istemiyorsan **Docker kurulumunu kullan** —
+o zaman hiçbir sistem paketi kurulmaz.
+
+### Kurulum
+
+```bash
+# 1. Portun boş olduğunu doğrula (çıktı boşsa boştur)
+ss -tlnp | grep :3050
+
+# 2. Diğer projelerden ayrı bir klasöre klonla
+mkdir -p ~/apps && cd ~/apps
+git clone -b claude/universal-web-scraper-mcp-b7qn4o \
+  https://github.com/nietzische-app/webscraper.git webscraper
+cd webscraper
+
+# 3. Kur ve derle (her şey bu klasörde kalır)
+npm install
+npm run build
+
+# 4. Testleri çalıştır — internet gerektirmez, doğru kurulduğunu kanıtlar
+npm run smoke
+```
+
 ### PM2
 
 ```bash
-npm install && npm run build
 pm2 start ecosystem.config.cjs
-pm2 save && pm2 startup
 pm2 logs web-scraper
 ```
+
+⚠️ **`pm2 save` hakkında:** bu komut o an çalışan **tüm** PM2 uygulamalarının
+listesini kaydeder. Sunucunda PM2 ile yönettiğin başka projeler varsa, önce
+`pm2 list` ile hepsinin ayakta olduğunu doğrula; ancak ondan sonra `pm2 save`
+çalıştır. Aksi hâlde o an duran bir uygulaman kayıtlı listeden düşer.
+`pm2 startup` zaten kuruluysa tekrar çalıştırmana gerek yok.
 
 `ecosystem.config.cjs` içinde port `3050`, bind adresi `127.0.0.1`, bellek
 sınırı `1G` ve `kill_timeout: 10s` (tarayıcının düzgün kapanması için) ayarlıdır.
@@ -212,6 +251,11 @@ Chromium'un sistem bağımlılıkları için bir kereye mahsus:
 docker compose up -d --build
 docker compose logs -f
 ```
+
+Docker yolu sisteme hiçbir paket kurmaz, kazınan dosyalar `scraper-data`
+volume'unda tutulur ve port yalnızca `127.0.0.1:3050`'ye yayınlanır. Sunucunda
+başka compose projeleri varsa çakışma olmaması için bu klasörden çalıştır —
+proje adı klasör adından (`webscraper`) türetilir.
 
 `Dockerfile` resmi Playwright imajını kullanır (Chromium ve tüm kütüphaneler
 hazır gelir), root olmayan `pwuser` ile çalışır, `/data` volume'una yazar ve
