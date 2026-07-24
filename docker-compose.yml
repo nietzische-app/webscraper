@@ -1,0 +1,25 @@
+services:
+  web-scraper:
+    build: .
+    container_name: web-scraper
+    restart: unless-stopped
+    # Published on the host loopback only: put nginx in front, or change to
+    # "3050:3050" and set SCRAPER_API_TOKEN if you expose it directly.
+    ports:
+      - "127.0.0.1:3050:3050"
+    environment:
+      PORT: 3050
+      HOST: 0.0.0.0
+      SCRAPER_OUTPUT_DIR: /data
+      SCRAPER_MAX_CONCURRENT_JOBS: 2
+      SCRAPER_LOCALE: tr-TR
+      SCRAPER_TIMEZONE: Europe/Istanbul
+      # SCRAPER_API_TOKEN: buraya-uzun-rastgele-bir-token
+    volumes:
+      - scraper-data:/data
+    # Chromium needs a bigger /dev/shm than Docker's 64 MB default.
+    shm_size: "1gb"
+    mem_limit: 2g
+
+volumes:
+  scraper-data:

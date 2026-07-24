@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="tr" class="h-full">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Universal Web Scraper</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕷️</text></svg>">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  // The CDN is unreachable on servers without outbound access; the panel still
+  // works then, it just loses its styling — so guard every use of `tailwind`.
+  if (window.tailwind) {
+    tailwind.config = { darkMode: "class", theme: { extend: { fontFamily: { sans: ["Inter", "system-ui", "sans-serif"] } } } };
+  }
+  // Follow the OS theme before first paint so the page never flashes white.
+  if (window.matchMedia("(prefers-color-scheme: dark)").matches) document.documentElement.classList.add("dark");
+</script>
+<style>
+  /* Show/hide must keep working even when the Tailwind CDN is unreachable. */
+  .hidden { display: none !important; }
+  .spinner { border-top-color: transparent; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .fade-in { animation: fade .25s ease-out; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body class="h-full bg-slate-100 text-slate-800 dark:bg-slate-950 dark:text-slate-200">
+
+<div class="mx-auto max-w-7xl px-4 py-6">
+
+  <!-- Header -->
+  <header class="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-semibold tracking-tight">🕷️ Universal Web Scraper</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400">Playwright tabanlı kazıma paneli</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="health" class="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">bağlanıyor…</span>
+      <button id="themeToggle" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-200 dark:border-slate-700 dark:hover:bg-slate-800">🌓</button>
+    </div>
+  </header>
+
+  <div class="grid gap-6 lg:grid-cols-3">
+
+    <!-- Form -->
+    <section class="lg:col-span-1">
+      <form id="scrapeForm" class="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div>
+          <label for="url" class="mb-1 block text-sm font-medium">Hedef URL</label>
+          <input id="url" name="url" type="text" required placeholder="https://ornek-site.com/urunler"
+                 class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-700 dark:bg-slate-950">
+        </div>
+
+        <div>
+          <span class="mb-1 block text-sm font-medium">İşlem türü</span>
+          <div id="typeGroup" class="grid grid-cols-2 gap-2">
+            <label class="cursor-pointer">
+              <input type="radio" name="type" value="list" class="peer sr-only" checked>
+              <div class="rounded-lg border border-slate-300 p-2.5 text-center text-sm peer-checked:border-indigo-500 peer-checked:bg-indigo-50 peer-checked:font-medium peer-checked:text-indigo-700 dark:border-slate-700 dark:peer-checked:bg-indigo-950/50 dark:peer-checked:text-indigo-300">🛒 Ürün / Liste</div>
+            </label>
+            <label class="cursor-pointer">
+              <input type="radio" name="type" value="leads" class="peer sr-only">
+              <div class="rounded-lg border border-slate-300 p-2.5 text-center text-sm peer-checked:border-indigo-500 peer-checked:bg-indigo-50 peer-checked:font-medium peer-checked:text-indigo-700 dark:border-slate-700 dark:peer-checked:bg-indigo-950/50 dark:peer-checked:text-indigo-300">📇 İletişim</div>
+            </label>
+            <label class="cursor-pointer">
+              <input type="radio" name="type" value="images" class="peer sr-only">
+              <div class="rounded-lg border border-slate-300 p-2.5 text-center text-sm peer-checked:border-indigo-500 peer-checked:bg-indigo-50 peer-checked:font-medium peer-checked:text-indigo-700 dark:border-slate-700 dark:peer-checked:bg-indigo-950/50 dark:peer-checked:text-indigo-300">🖼️ Görseller</div>
+            </label>
+            <label class="cursor-pointer">
+              <input type="radio" name="type" value="text" class="peer sr-only">
+              <div class="rounded-lg border border-slate-300 p-2.5 text-center text-sm peer-checked:border-indigo-500 peer-checked:bg-indigo-50 peer-checked:font-medium peer-checked:text-indigo-700 dark:border-slate-700 dark:peer-checked:bg-indigo-950/50 dark:peer-checked:text-indigo-300">📄 Metin</div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Type-specific options -->
+        <div data-opts="list" class="space-y-3">
+          <div>
+            <label for="itemSelector" class="mb-1 block text-sm font-medium">Öğe seçici <span class="font-normal text-slate-400">(boşsa otomatik)</span></label>
+            <input id="itemSelector" type="text" placeholder=".product-card veya table tbody tr"
+                   class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+          </div>
+          <div>
+            <label for="pageUrlPattern" class="mb-1 block text-sm font-medium">Sayfa URL şablonu <span class="font-normal text-slate-400">(opsiyonel)</span></label>
+            <input id="pageUrlPattern" type="text" placeholder="https://site.com/urunler?page={page}"
+                   class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+          </div>
+        </div>
+
+        <div data-opts="list leads" class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="maxPages" class="mb-1 block text-sm font-medium">Maks. sayfa</label>
+            <input id="maxPages" type="number" min="1" max="50" value="1"
+                   class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+          </div>
+          <div data-opts="list">
+            <label for="maxItems" class="mb-1 block text-sm font-medium">Maks. satır</label>
+            <input id="maxItems" type="number" min="1" max="10000" value="1000"
+                   class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+          </div>
+        </div>
+
+        <div data-opts="images" class="grid grid-cols-3 gap-3">
+          <div>
+            <label for="minWidth" class="mb-1 block text-sm font-medium">Min. en</label>
+            <input id="minWidth" type="number" min="0" value="200" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+          </div>
+          <div>
+            <label for="minHeight" class="mb-1 block text-sm font-medium">Min. boy</label>
+            <input id="minHeight" type="number" min="0" value="200" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+          </div>
+          <div>
+            <label for="maxImages" class="mb-1 block text-sm font-medium">Maks. adet</label>
+            <input id="maxImages" type="number" min="1" max="1000" value="50" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+          </div>
+        </div>
+
+        <div data-opts="text">
+          <label for="selector" class="mb-1 block text-sm font-medium">İçerik seçici <span class="font-normal text-slate-400">(opsiyonel)</span></label>
+          <input id="selector" type="text" placeholder="main, #content, article"
+                 class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+        </div>
+
+        <details class="rounded-lg border border-slate-200 p-3 text-sm dark:border-slate-800">
+          <summary class="cursor-pointer font-medium">Gelişmiş ayarlar</summary>
+          <div class="mt-3 space-y-3">
+            <label class="flex items-center gap-2">
+              <input id="scrollToBottom" type="checkbox" class="h-4 w-4 rounded border-slate-300">
+              <span>Sayfa sonuna kaydır (lazy-load içerik)</span>
+            </label>
+            <div>
+              <label for="waitForSelector" class="mb-1 block font-medium">Beklenecek seçici</label>
+              <input id="waitForSelector" type="text" placeholder=".product-card"
+                     class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950">
+            </div>
+            <div>
+              <label for="apiToken" class="mb-1 block font-medium">API token <span class="font-normal text-slate-400">(SCRAPER_API_TOKEN ayarlıysa)</span></label>
+              <input id="apiToken" type="password" autocomplete="off"
+                     class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950">
+            </div>
+          </div>
+        </details>
+
+        <button id="submitBtn" type="submit"
+                class="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60">
+          <span id="submitSpinner" class="spinner hidden h-4 w-4 rounded-full border-2 border-white"></span>
+          <span id="submitLabel">Kazımayı Başlat</span>
+        </button>
+      </form>
+
+      <!-- Files -->
+      <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div class="mb-3 flex items-center justify-between">
+          <h2 class="font-semibold">📁 Oluşturulan dosyalar</h2>
+          <button id="refreshFiles" class="text-xs text-indigo-600 hover:underline dark:text-indigo-400">yenile</button>
+        </div>
+        <ul id="fileList" class="space-y-1 text-sm text-slate-500 dark:text-slate-400"><li>henüz dosya yok</li></ul>
+      </section>
+    </section>
+
+    <!-- Results -->
+    <section class="lg:col-span-2 space-y-4">
+      <div id="status" class="hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"></div>
+      <div id="results" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <p class="text-sm text-slate-500 dark:text-slate-400">Sonuçlar burada görünecek. Bir URL girip “Kazımayı Başlat”a bas.</p>
+      </div>
+
+      <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <h2 class="mb-3 font-semibold">🕘 Son işler</h2>
+        <ul id="jobList" class="space-y-1 text-sm text-slate-500 dark:text-slate-400"><li>henüz iş yok</li></ul>
+      </section>
+    </section>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+const results = $("results");
+const statusBox = $("status");
+
+/* ---------- helpers ---------- */
+
+// Scraped content is untrusted: everything goes in through textContent.
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined && text !== null) node.textContent = String(text);
+  return node;
+}
+
+function link(href, text, className) {
+  const a = el("a", className || "text-indigo-600 hover:underline dark:text-indigo-400", text);
+  a.href = href;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer nofollow";
+  return a;
+}
+
+function token() {
+  return $("apiToken").value.trim();
+}
+
+async function api(url, options = {}) {
+  const headers = Object.assign({ "Content-Type": "application/json" }, options.headers || {});
+  const t = token();
+  if (t) headers["X-API-Token"] = t;
+  const response = await fetch(url, Object.assign({}, options, { headers }));
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`, { cause: body.details });
+  return body;
+}
+
+function bytes(n) {
+  if (n < 1024) return n + " B";
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+  return (n / 1024 / 1024).toFixed(2) + " MB";
+}
+
+/* ---------- form option visibility ---------- */
+
+function currentType() {
+  return document.querySelector('input[name="type"]:checked').value;
+}
+
+function syncOptionVisibility() {
+  const type = currentType();
+  document.querySelectorAll("[data-opts]").forEach((node) => {
+    node.classList.toggle("hidden", !node.dataset.opts.split(" ").includes(type));
+  });
+}
+
+document.querySelectorAll('input[name="type"]').forEach((input) => input.addEventListener("change", syncOptionVisibility));
+syncOptionVisibility();
+
+$("themeToggle").addEventListener("click", () => {
+  document.documentElement.classList.toggle("dark");
+});
+
+/* ---------- token persistence ---------- */
+
+$("apiToken").value = localStorage.getItem("scraperToken") || "";
+$("apiToken").addEventListener("change", () => localStorage.setItem("scraperToken", token()));
+
+/* ---------- submit ---------- */
+
+let pollTimer = null;
+
+function buildOptions(type) {
+  const options = {};
+  const num = (id) => { const v = parseInt($(id).value, 10); return Number.isFinite(v) ? v : undefined; };
+
+  if ($("scrollToBottom").checked) options.scrollToBottom = true;
+  if ($("waitForSelector").value.trim()) options.waitForSelector = $("waitForSelector").value.trim();
+
+  if (type === "list") {
+    if ($("itemSelector").value.trim()) options.itemSelector = $("itemSelector").value.trim();
+    if ($("pageUrlPattern").value.trim()) options.pageUrlPattern = $("pageUrlPattern").value.trim();
+    options.maxPages = num("maxPages");
+    options.maxItems = num("maxItems");
+  }
+  if (type === "leads") options.maxPages = num("maxPages");
+  if (type === "images") {
+    options.minWidth = num("minWidth");
+    options.minHeight = num("minHeight");
+    options.maxImages = num("maxImages");
+  }
+  if (type === "text" && $("selector").value.trim()) options.selector = $("selector").value.trim();
+
+  Object.keys(options).forEach((key) => options[key] === undefined && delete options[key]);
+  return options;
+}
+
+$("scrapeForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (pollTimer) clearInterval(pollTimer);
+
+  const type = currentType();
+  const url = $("url").value.trim();
+  setBusy(true);
+  showStatus("queued", url, type, 0);
+  results.replaceChildren(el("p", "text-sm text-slate-500 dark:text-slate-400", "Kazıma sürüyor…"));
+
+  try {
+    const { jobId } = await api("/api/scrape", { method: "POST", body: JSON.stringify({ url, type, options: buildOptions(type) }) });
+    pollJob(jobId, Date.now());
+  } catch (error) {
+    setBusy(false);
+    showError(error);
+  }
+});
+
+function pollJob(jobId, startedAt) {
+  pollTimer = setInterval(async () => {
+    try {
+      const job = await api(`/api/jobs/${jobId}`);
+      const elapsed = Math.round((Date.now() - startedAt) / 1000);
+      showStatus(job.status, job.url, job.type, elapsed);
+
+      if (job.status === "done" || job.status === "error") {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        setBusy(false);
+        loadJobs();
+        if (job.status === "error") showError(new Error(job.error || "Bilinmeyen hata"));
+        else renderResult(job);
+      }
+    } catch (error) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+      setBusy(false);
+      showError(error);
+    }
+  }, 900);
+}
+
+function setBusy(busy) {
+  $("submitBtn").disabled = busy;
+  $("submitSpinner").classList.toggle("hidden", !busy);
+  $("submitLabel").textContent = busy ? "Kazınıyor…" : "Kazımayı Başlat";
+}
+
+const STATUS_LABEL = { queued: "Sırada", running: "Çalışıyor", done: "Tamamlandı", error: "Hata" };
+
+function showStatus(status, url, type, elapsedSeconds) {
+  statusBox.classList.remove("hidden");
+  statusBox.replaceChildren();
+
+  const row = el("div", "flex items-center gap-3");
+  if (status === "queued" || status === "running") {
+    row.appendChild(el("span", "spinner h-5 w-5 rounded-full border-2 border-indigo-600"));
+  } else {
+    row.appendChild(el("span", "text-xl", status === "done" ? "✅" : "❌"));
+  }
+
+  const info = el("div", "min-w-0 flex-1");
+  info.appendChild(el("p", "font-medium", `${STATUS_LABEL[status] || status} · ${type}`));
+  info.appendChild(el("p", "truncate text-sm text-slate-500 dark:text-slate-400", url));
+  row.appendChild(info);
+  row.appendChild(el("span", "text-sm tabular-nums text-slate-500 dark:text-slate-400", `${elapsedSeconds}s`));
+  statusBox.appendChild(row);
+}
+
+function showError(error) {
+  results.replaceChildren();
+  const box = el("div", "fade-in rounded-lg border border-red-300 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/40");
+  box.appendChild(el("p", "font-medium text-red-700 dark:text-red-300", "Kazıma başarısız"));
+  box.appendChild(el("p", "mt-1 text-sm text-red-600 dark:text-red-400", error.message));
+  const hint = el("p", "mt-2 text-xs text-red-500 dark:text-red-400",
+    "İpucu: içerik JavaScript ile geliyorsa “Sayfa sonuna kaydır” seçeneğini işaretle veya beklenecek seçici gir.");
+  box.appendChild(hint);
+  results.appendChild(box);
+}
+
+/* ---------- result rendering ---------- */
+
+function exportBar(job) {
+  const bar = el("div", "mb-4 flex flex-wrap items-center gap-2");
+  ["csv", "json"].forEach((format) => {
+    const button = el("button", "rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600", `${format.toUpperCase()} indir`);
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      button.textContent = "hazırlanıyor…";
+      try {
+        const exported = await api("/api/export", { method: "POST", body: JSON.stringify({ jobId: job.id, format }) });
+        window.location.href = exported.url + (token() ? `?token=${encodeURIComponent(token())}` : "");
+        loadFiles();
+      } catch (error) {
+        alert(error.message);
+      } finally {
+        button.disabled = false;
+        button.textContent = `${format.toUpperCase()} indir`;
+      }
+    });
+    bar.appendChild(button);
+  });
+  return bar;
+}
+
+function table(rows, columns) {
+  const wrapper = el("div", "overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800");
+  const t = el("table", "min-w-full text-left text-sm");
+  const thead = el("thead", "bg-slate-100 dark:bg-slate-800");
+  const headRow = el("tr");
+  columns.forEach((column) => headRow.appendChild(el("th", "whitespace-nowrap px-3 py-2 font-semibold", column)));
+  thead.appendChild(headRow);
+  t.appendChild(thead);
+
+  const tbody = el("tbody", "divide-y divide-slate-200 dark:divide-slate-800");
+  rows.forEach((row) => {
+    const tr = el("tr", "hover:bg-slate-50 dark:hover:bg-slate-800/50");
+    columns.forEach((column) => {
+      const value = row[column];
+      const td = el("td", "max-w-xs truncate px-3 py-2 align-top");
+      if (typeof value === "string" && /^https?:\/\//.test(value)) td.appendChild(link(value, value));
+      else td.textContent = value === null || value === undefined ? "" : String(value);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  t.appendChild(tbody);
+  wrapper.appendChild(t);
+  return wrapper;
+}
+
+function renderResult(job) {
+  const data = job.result || {};
+  results.replaceChildren();
+  const container = el("div", "fade-in");
+  container.appendChild(exportBar(job));
+
+  if (job.type === "list") {
+    const items = data.items || [];
+    const columns = [...new Set(items.flatMap((item) => Object.keys(item)))];
+    container.appendChild(el("p", "mb-2 text-sm text-slate-500 dark:text-slate-400",
+      `${data.itemCount} kayıt · seçici: ${data.itemSelector}${data.autoDetected ? " (otomatik)" : ""} · ${(data.pagesScraped || []).length} sayfa`));
+    container.appendChild(table(items.slice(0, 500), columns));
+    if (items.length > 500) container.appendChild(el("p", "mt-2 text-xs text-slate-500", `İlk 500 satır gösteriliyor; CSV indirmede ${items.length} satırın tamamı yer alır.`));
+  }
+
+  else if (job.type === "leads") {
+    const grid = el("div", "grid gap-4 md:grid-cols-2");
+
+    const emails = el("div");
+    emails.appendChild(el("h3", "mb-2 font-semibold", `📧 E-postalar (${(data.emails || []).length})`));
+    const emailList = el("ul", "space-y-1 text-sm");
+    (data.emails || []).forEach((email) => {
+      const li = el("li", "rounded bg-slate-50 px-2 py-1 dark:bg-slate-800");
+      li.appendChild(link("mailto:" + email, email));
+      emailList.appendChild(li);
+    });
+    if (!(data.emails || []).length) emailList.appendChild(el("li", "text-slate-500", "bulunamadı"));
+    emails.appendChild(emailList);
+    grid.appendChild(emails);
+
+    const phones = el("div");
+    phones.appendChild(el("h3", "mb-2 font-semibold", `📞 Telefonlar (${(data.phones || []).length})`));
+    const phoneList = el("ul", "space-y-1 text-sm");
+    (data.phones || []).forEach((phone) => {
+      const li = el("li", "rounded bg-slate-50 px-2 py-1 dark:bg-slate-800");
+      li.appendChild(link("tel:" + phone.normalized, phone.normalized));
+      li.appendChild(el("span", "ml-2 text-xs text-slate-500", `(${phone.raw})`));
+      phoneList.appendChild(li);
+    });
+    if (!(data.phones || []).length) phoneList.appendChild(el("li", "text-slate-500", "bulunamadı"));
+    phones.appendChild(phoneList);
+    grid.appendChild(phones);
+    container.appendChild(grid);
+
+    if ((data.socialProfiles || []).length) {
+      container.appendChild(el("h3", "mb-2 mt-4 font-semibold", "🔗 Sosyal medya"));
+      const social = el("div", "flex flex-wrap gap-2");
+      data.socialProfiles.forEach((profile) => {
+        const chip = link(profile.url, profile.network, "rounded-full bg-indigo-50 px-3 py-1 text-sm text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300");
+        social.appendChild(chip);
+      });
+      container.appendChild(social);
+    }
+    if ((data.addresses || []).length) {
+      container.appendChild(el("h3", "mb-2 mt-4 font-semibold", "📍 Adresler"));
+      const list = el("ul", "space-y-1 text-sm");
+      data.addresses.forEach((address) => list.appendChild(el("li", "rounded bg-slate-50 px-2 py-1 dark:bg-slate-800", address)));
+      container.appendChild(list);
+    }
+  }
+
+  else if (job.type === "images") {
+    const downloaded = data.downloaded || [];
+    container.appendChild(el("p", "mb-3 text-sm text-slate-500 dark:text-slate-400",
+      `${downloaded.length} görsel indirildi (${data.found} aday bulundu) → ${data.outputFolder}`));
+    const grid = el("div", "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4");
+    downloaded.forEach((image) => {
+      const card = el("div", "overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800");
+      if (image.downloadUrl) {
+        const img = document.createElement("img");
+        img.src = image.downloadUrl + (token() ? `?token=${encodeURIComponent(token())}` : "");
+        img.alt = "";
+        img.loading = "lazy";
+        img.className = "h-28 w-full bg-slate-100 object-cover dark:bg-slate-800";
+        card.appendChild(img);
+      }
+      const meta = el("div", "p-2 text-xs");
+      meta.appendChild(el("p", "truncate font-medium", (image.filePath || "").split(/[\\/]/).pop()));
+      meta.appendChild(el("p", "text-slate-500", `${image.width || "?"}×${image.height || "?"} · ${bytes(image.bytes || 0)}`));
+      if (image.downloadUrl) meta.appendChild(link(image.downloadUrl, "indir", "text-indigo-600 dark:text-indigo-400"));
+      card.appendChild(meta);
+      grid.appendChild(card);
+    });
+    container.appendChild(grid);
+  }
+
+  else {
+    container.appendChild(el("h3", "font-semibold", data.title || "(başlık yok)"));
+    if (data.description) container.appendChild(el("p", "mb-2 text-sm text-slate-500 dark:text-slate-400", data.description));
+    container.appendChild(el("p", "mb-3 text-xs text-slate-500", `${data.textLength} karakter · ${(data.links || []).length} link · HTTP ${data.status}`));
+    container.appendChild(el("pre", "max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-800", data.text || ""));
+  }
+
+  results.appendChild(container);
+}
+
+/* ---------- sidebars ---------- */
+
+async function loadFiles() {
+  try {
+    const { files } = await api("/api/files");
+    const list = $("fileList");
+    list.replaceChildren();
+    if (!files.length) return list.appendChild(el("li", "", "henüz dosya yok"));
+    files.slice(0, 15).forEach((file) => {
+      const li = el("li", "flex items-center justify-between gap-2");
+      li.appendChild(link(file.url + (token() ? `?token=${encodeURIComponent(token())}` : ""), file.file, "truncate text-indigo-600 hover:underline dark:text-indigo-400"));
+      li.appendChild(el("span", "shrink-0 text-xs text-slate-400", bytes(file.bytes)));
+      list.appendChild(li);
+    });
+  } catch { /* token missing or server busy — silent */ }
+}
+
+async function loadJobs() {
+  try {
+    const { jobs } = await api("/api/jobs");
+    const list = $("jobList");
+    list.replaceChildren();
+    if (!jobs.length) return list.appendChild(el("li", "", "henüz iş yok"));
+    jobs.slice(0, 10).forEach((job) => {
+      const li = el("li", "flex items-center justify-between gap-2");
+      const label = el("span", "truncate", `${job.status === "done" ? "✅" : job.status === "error" ? "❌" : "⏳"} ${job.type} · ${job.url}`);
+      li.appendChild(label);
+      const meta = job.durationMs ? `${(job.durationMs / 1000).toFixed(1)}s` : job.status;
+      li.appendChild(el("span", "shrink-0 text-xs text-slate-400", meta));
+      list.appendChild(li);
+    });
+  } catch { /* ignore */ }
+}
+
+async function loadHealth() {
+  const badge = $("health");
+  try {
+    const health = await api("/api/health");
+    badge.textContent = `● çalışıyor · ${health.jobs.running}/${health.jobs.maxConcurrent} aktif${health.authRequired ? " · 🔒" : ""}`;
+    badge.className = "rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300";
+  } catch {
+    badge.textContent = "● bağlantı yok";
+    badge.className = "rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700 dark:bg-red-950/60 dark:text-red-300";
+  }
+}
+
+// Tell the user why the page looks unstyled instead of leaving them guessing.
+if (!window.tailwind) {
+  const warning = el("div", "", "⚠️ Tailwind CDN yüklenemedi (sunucunun dışarı erişimi yok olabilir). Panel çalışıyor ama stilsiz görünüyor.");
+  warning.setAttribute("style", "background:#fef3c7;color:#92400e;padding:8px 12px;font:14px system-ui;text-align:center");
+  document.body.prepend(warning);
+}
+
+$("refreshFiles").addEventListener("click", loadFiles);
+loadHealth();
+loadFiles();
+loadJobs();
+setInterval(loadHealth, 15000);
+</script>
+</body>
+</html>

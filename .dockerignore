@@ -1,0 +1,12 @@
+node_modules
+build
+test
+logs
+.git
+.gitignore
+scraper-output
+*.md
+!README.md
+Dockerfile
+docker-compose.yml
+ecosystem.config.cjs
