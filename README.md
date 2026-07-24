@@ -226,8 +226,12 @@ npm run build
 # 4. Chromium'un sistem kütüphanelerini kur — ATLANMAZ.
 #    Önce ne kurulacağını gör (hiçbir şey kurmaz):
 npx playwright install-deps --dry-run chromium
-#    Sonra kur:
-sudo npx playwright install-deps chromium
+
+#    Sonra kur. root isen (prompt "root@..." ise) sudo KULLANMA:
+npx playwright install-deps chromium
+#    Normal kullanıcıysan sudo PATH'i sıfırladığı için npx'i bulamaz;
+#    "sudo: npx: command not found" alırsan PATH'i taşıyarak çağır:
+sudo env "PATH=$PATH" npx playwright install-deps chromium
 
 # 5. Testleri çalıştır — internet gerektirmez, doğru kurulduğunu kanıtlar
 npm run smoke
@@ -257,7 +261,7 @@ listesini kaydeder. Sunucunda PM2 ile yönettiğin başka projeler varsa, önce
 `ecosystem.config.cjs` içinde port `3050`, bind adresi `127.0.0.1`, bellek
 sınırı `1G` ve `kill_timeout: 10s` (tarayıcının düzgün kapanması için) ayarlıdır.
 Chromium'un sistem bağımlılıkları için bir kereye mahsus:
-`sudo npx playwright install-deps chromium`.
+`npx playwright install-deps chromium` (root değilsen `sudo env "PATH=$PATH" npx …`).
 
 ### Docker
 
@@ -300,13 +304,22 @@ hazır gelir), root olmayan `pwuser` ile çalışır, `/data` volume'una yazar v
 ## Sorun giderme
 
 - **"Chromium could not be launched"** → `npx playwright install chromium` çalıştır ya da `SCRAPER_CHROME_PATH` ayarla.
-- **"Chromium is installed but the system is missing the libraries it needs"** / `libnspr4.so: cannot open shared object file` → `sudo npx playwright install-deps chromium` (ya da Docker kurulumu). Tarayıcı inmiş ama işletim sisteminde bağımlı olduğu kütüphaneler yok.
+- **"Chromium is installed but the system is missing the libraries it needs"** / `libnspr4.so: cannot open shared object file` → `npx playwright install-deps chromium` (ya da Docker kurulumu). Tarayıcı inmiş ama işletim sisteminde bağımlı olduğu kütüphaneler yok.
+- **`sudo: npx: command not found`** → `sudo` kendi PATH'ini kullanır ve nvm/nodesource ile kurulmuş `npx`'i görmez. root isen `sudo`'yu tamamen kaldır; değilsen `sudo env "PATH=$PATH" npx …` yaz. Node'a hiç bağlı olmayan alternatif, paketleri doğrudan apt ile kurmaktır:
+  ```bash
+  apt-get update && apt-get install -y \
+    libnspr4 libnss3 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 libdrm2 \
+    libatspi2.0-0t64 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 \
+    libxkbcommon0 libasound2t64 libpango-1.0-0 libcairo2 fonts-liberation
+  ```
+  (Ubuntu 24.04 "noble" isimlendirmesi; daha eski sürümlerde `t64` ekleri olmadan.)
+  Kurulumdan sonra `npm run smoke` ile doğrula.
 - **Sayfa boş dönüyor** → İçerik JavaScript ile geliyordur: `scroll_to_bottom: true` ve/veya `wait_for_selector` ekle.
 - **Yanlış satırlar çıkıyor** → `item_selector`'ı elle ver; tarayıcıda "İncele" ile ürün kartının class'ına bak.
 - **Claude araçları görmüyor** → `build/index.js` yolunun mutlak olduğundan ve `npm run build` çalıştırıldığından emin ol, sonra Claude Desktop'ı tamamen kapatıp aç.
 - **Sunucu logları** → MCP sunucusu stdout'u protokol için kullanır; tüm loglar stderr'e yazılır (Claude Desktop → MCP log dosyaları). Web sunucusunda `pm2 logs web-scraper` ya da `docker compose logs -f`.
 - **Panel "bağlantı yok" diyor** → API token ayarlıysa "Gelişmiş ayarlar → API token" alanına gir; ayrıca `curl localhost:3050/api/health` ile sunucunun ayakta olduğunu doğrula.
-- **Sunucuda "Host system is missing dependencies"** → `sudo npx playwright install-deps chromium` (ya da Docker kurulumunu kullan).
+- **Sunucuda "Host system is missing dependencies"** → yukarıdaki `install-deps` adımını çalıştır (ya da Docker kurulumunu kullan).
 
 ---
 
