@@ -37,7 +37,25 @@ before(async () => {
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
   await page.goto(`http://127.0.0.1:${apiServer.address().port}`, { waitUntil: "domcontentloaded" });
+
+  // The type radios are visually hidden by Tailwind's `sr-only`, so users click
+  // the label card instead. Inject that rule ourselves so the test exercises the
+  // same path whether or not the Tailwind CDN was reachable.
+  await page.addStyleTag({
+    content:
+      ".sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border-width:0}",
+  });
 });
+
+/** Selects a job type the way a user does: by clicking its card. */
+async function selectType(value) {
+  await page.locator(`label:has(input[name="type"][value="${value}"])`).click();
+  await page.waitForFunction(
+    (v) => document.querySelector('input[name="type"]:checked')?.value === v,
+    value,
+    { timeout: 5_000 },
+  );
+}
 
 after(async () => {
   await browser?.close();
@@ -54,11 +72,11 @@ test("the panel loads and reports server health", async () => {
 });
 
 test("option groups follow the selected job type", async () => {
-  await page.locator('input[name="type"][value="images"]').check();
+  await selectType("images");
   assert.ok(await page.locator("#minWidth").isVisible(), "image options must show");
   assert.ok(!(await page.locator("#itemSelector").isVisible()), "list options must hide");
 
-  await page.locator('input[name="type"][value="list"]').check();
+  await selectType("list");
   assert.ok(await page.locator("#itemSelector").isVisible());
   assert.ok(!(await page.locator("#minWidth").isVisible()));
 });
@@ -91,7 +109,7 @@ test("a list scrape renders a table and exports CSV", async () => {
 });
 
 test("a leads scrape renders e-mails and phones", async () => {
-  await page.locator('input[name="type"][value="leads"]').check();
+  await selectType("leads");
   await page.fill("#url", `${fixture.baseUrl}/iletisim`);
   await page.click("#submitBtn");
 
@@ -103,7 +121,7 @@ test("a leads scrape renders e-mails and phones", async () => {
 });
 
 test("an image scrape renders working previews", async () => {
-  await page.locator('input[name="type"][value="images"]').check();
+  await selectType("images");
   await page.fill("#url", `${fixture.baseUrl}/galeri`);
   await page.fill("#minWidth", "100");
   await page.fill("#minHeight", "100");
@@ -118,7 +136,7 @@ test("an image scrape renders working previews", async () => {
 });
 
 test("a failed scrape shows an error box, not a blank panel", async () => {
-  await page.locator('input[name="type"][value="list"]').check();
+  await selectType("list");
   await page.fill("#url", `${fixture.baseUrl}/tablo`);
   await page.fill("#itemSelector", ".nope");
   await page.click("#submitBtn");
