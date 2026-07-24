@@ -106,6 +106,24 @@ function productsPage(page) {
   <body><h1>Ürünler</h1><div class="product-list">${items}</div><div class="pagination">${next}</div></body></html>`;
 }
 
+/** Class names outside the built-in auto-detect list, like a real custom store. */
+const shopPage = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Sırt Çantası</title></head>
+<body>
+  <div class="katalog-govde">
+    ${Array.from({ length: 8 }, (_, i) => `
+    <div class="urun-kutu-2024">
+      <a href="/urun/canta-${i + 1}">
+        <img src="/img/canta-${i + 1}.png" alt="Çanta ${i + 1}">
+        <span class="baslik">Sırt Çantası Model ${i + 1}</span>
+        <span class="tutar">${(i + 1) * 250},00 TL</span>
+      </a>
+    </div>`).join("")}
+  </div>
+  <script type="application/ld+json">
+    {"@context":"https://schema.org","@type":"Product","name":"Sırt Çantası Model 1"}
+  </script>
+</body></html>`;
+
 const tablePage = `<!doctype html><html><head><meta charset="utf-8"><title>Fiyat Listesi</title></head>
 <body><table>
   <thead><tr><th>Model</th><th>Stok</th><th>Fiyat</th></tr></thead>
@@ -143,6 +161,7 @@ export function startFixtureServer(port = 0) {
     if (path === "/iletisim") return html(contactPage);
     if (path === "/urunler") return html(productsPage(Number(url.searchParams.get("page") ?? 1)));
     if (path === "/tablo") return html(tablePage);
+    if (path === "/magaza") return html(shopPage);
     if (path === "/galeri") return html(galleryPage);
 
     res.writeHead(404, { "content-type": "text/plain" });

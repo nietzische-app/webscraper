@@ -16,6 +16,7 @@ tarayıcısı (Playwright) çalıştırır ve **iki arayüz** sunar:
 | `extract_leads` / API `leads` | E-posta, telefon, sosyal medya ve adres bilgilerini toplar (iletişim sayfalarını da gezer) |
 | `extract_list` / API `list` | Ürün listeleri, arama sonuçları, dizinler ve HTML tabloları → JSON dizisi (sayfalama destekli) |
 | `download_images` / API `images` | Sayfadaki görselleri en yüksek çözünürlüklü hâliyle diske indirir |
+| `suggest_selectors` / API `inspect` | Liste sayfasını inceleyip doğru `itemSelector`'ı bulur (otomatik tespit başarısız olunca) |
 | `export_to_file` | Çekilen veriyi `.csv` veya `.json` olarak kaydeder |
 | `list_datasets` | Oturumdaki veri setlerini listeler |
 
@@ -64,7 +65,7 @@ export SCRAPER_CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Googl
 ```
 
 Testleri çalıştır (internet gerekmez, yerel bir test fixture sitesi ayağa kaldırılır —
-kütüphane, MCP protokolü, HTTP API, token doğrulaması ve panel arayüzü dahil 45 test):
+kütüphane, MCP protokolü, HTTP API, token doğrulaması ve panel arayüzü dahil 52 test):
 
 ```bash
 npm run smoke
@@ -409,7 +410,12 @@ hazır gelir), root olmayan `pwuser` ile çalışır, `/data` volume'una yazar v
   (Ubuntu 24.04 "noble" isimlendirmesi; daha eski sürümlerde `t64` ekleri olmadan.)
   Kurulumdan sonra `npm run smoke` ile doğrula.
 - **Sayfa boş dönüyor** → İçerik JavaScript ile geliyordur: `scroll_to_bottom: true` ve/veya `wait_for_selector` ekle.
-- **Yanlış satırlar çıkıyor** → `item_selector`'ı elle ver; tarayıcıda "İncele" ile ürün kartının class'ına bak.
+- **"Could not auto-detect a repeating item selector"** veya yanlış satırlar → önce sayfayı incelet:
+  ```bash
+  curl -s -X POST 'localhost:3050/api/scrape?wait=1' -H 'Content-Type: application/json' \
+    -d '{"url":"https://site.com/kategori","type":"inspect"}'
+  ```
+  Dönen listede aday seçiciler; her biri için kaç öğe bulunduğu, kaçında link/görsel/fiyat olduğu ve örnek metinler yazar. En üsttekini `item_selector` olarak ver. Hiçbiri iyi puan almazsa liste JavaScript ile geliyordur: `"scrollToBottom":true` ve `"waitForSelector"` ekle.
 - **Claude araçları görmüyor** → `build/index.js` yolunun mutlak olduğundan ve `npm run build` çalıştırıldığından emin ol, sonra Claude Desktop'ı tamamen kapatıp aç.
 - **Sunucu logları** → MCP sunucusu stdout'u protokol için kullanır; tüm loglar stderr'e yazılır (Claude Desktop → MCP log dosyaları). Web sunucusunda `pm2 logs web-scraper` ya da `docker compose logs -f`.
 - **Panel "bağlantı yok" diyor** → API token ayarlıysa "Gelişmiş ayarlar → API token" alanına gir; ayrıca `curl localhost:3050/api/health` ile sunucunun ayakta olduğunu doğrula.

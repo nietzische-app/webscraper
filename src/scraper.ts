@@ -797,9 +797,12 @@ export function parsePriceValue(raw: string): number | null {
     if (lastComma > lastDot) digits = digits.replace(/\./g, "").replace(",", ".");
     else digits = digits.replace(/,/g, "");
   } else if (lastComma > -1) {
-    // "1,50" -> decimal; "1,500" -> thousands.
-    digits = digits.length - lastComma === 3 ? digits.replace(/,/g, "") : digits.replace(",", ".");
-  } else if (lastDot > -1 && digits.length - lastDot === 4) {
+    // Exactly three digits after the separator means it groups thousands
+    // ("1,500"); one or two mean it is decimal ("250,00" → 250).
+    const digitsAfter = digits.length - lastComma - 1;
+    digits = digitsAfter === 3 ? digits.replace(/,/g, "") : digits.replace(",", ".");
+  } else if (lastDot > -1 && digits.length - lastDot - 1 === 3) {
+    // Same rule for "1.500" (Turkish thousands); "199.99" stays decimal.
     digits = digits.replace(/\./g, "");
   }
   const value = Number.parseFloat(digits);
@@ -1383,6 +1386,177 @@ export async function downloadImages(
       found: byUrl.size,
       downloaded,
       skipped,
+      scrapedAt: new Date().toISOString(),
+    };
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* 5. Selector discovery                                                      */
+/* -------------------------------------------------------------------------- */
+
+export interface SelectorSuggestion {
+  selector: string;
+  count: number;
+  /** Percentage of sampled items carrying each signal. */
+  withLink: number;
+  withImage: number;
+  withPrice: number;
+  averageTextLength: number;
+  sampleTitles: string[];
+  score: number;
+}
+
+export interface InspectResult {
+  url: string;
+  finalUrl: string;
+  title: string;
+  suggestions: SelectorSuggestion[];
+  jsonLdProducts: number;
+  totalElements: number;
+  hint: string;
+  scrapedAt: string;
+}
+
+/**
+ * Reports which repeated element patterns look like a product/result list, so a
+ * failed auto-detection can be turned into an explicit `itemSelector` without
+ * opening devtools. Scores candidates by how many of them carry a link, an
+ * image and a price, which is what a real listing item almost always has.
+ */
+export async function suggestItemSelectors(
+  url: string,
+  options: NavigationOptions = {},
+): Promise<InspectResult> {
+  const target = normalizeUrl(url);
+
+  return browserManager.withPage({ scrollToBottom: true, ...options }, async (page) => {
+    await gotoAndSettle(page, target, { scrollToBottom: true, ...options });
+
+    const analysis = await page.evaluate(() => {
+      const PRICE = /(?:₺|TL|TRY|\$|USD|€|EUR|£|GBP)\s?\d|\d[\d.,]*\s?(?:₺|TL|TRY|\$|USD|€|EUR|£|GBP)/i;
+      const SKIP_TAGS = new Set(["html", "body", "head", "script", "style", "noscript", "svg", "path", "option"]);
+
+      // 1) Collect class tokens that repeat often enough to be a list.
+      const tokenCounts = new Map<string, number>();
+      const elements = document.querySelectorAll<HTMLElement>("*");
+      for (const el of Array.from(elements)) {
+        const tag = el.tagName.toLowerCase();
+        if (SKIP_TAGS.has(tag)) continue;
+        for (const cls of Array.from(el.classList)) {
+          // Skip hashed/utility-looking classes: they rarely identify an item.
+          if (!/^[a-zA-Z][\w-]{1,40}$/.test(cls)) continue;
+          const key = `${tag}.${cls}`;
+          tokenCounts.set(key, (tokenCounts.get(key) ?? 0) + 1);
+        }
+      }
+
+      // 2) Score every repeated pattern by how "item-like" its elements are.
+      const suggestions: {
+        selector: string;
+        count: number;
+        withLink: number;
+        withImage: number;
+        withPrice: number;
+        averageTextLength: number;
+        sampleTitles: string[];
+        score: number;
+      }[] = [];
+
+      for (const [selector, occurrences] of tokenCounts) {
+        if (occurrences < 3 || occurrences > 2000) continue;
+
+        let nodes: NodeListOf<HTMLElement>;
+        try {
+          nodes = document.querySelectorAll<HTMLElement>(selector);
+        } catch {
+          continue;
+        }
+        if (nodes.length < 3) continue;
+
+        const sample = Array.from(nodes).slice(0, 40);
+        let links = 0;
+        let images = 0;
+        let prices = 0;
+        let totalLength = 0;
+        const titles: string[] = [];
+
+        for (const node of sample) {
+          const text = (node.innerText || node.textContent || "").replace(/\s+/g, " ").trim();
+          totalLength += text.length;
+          if (node.querySelector("a[href]") || node.matches("a[href]")) links += 1;
+          if (node.querySelector("img") || /url\(/.test(getComputedStyle(node).backgroundImage)) images += 1;
+          if (PRICE.test(text)) prices += 1;
+          if (titles.length < 3 && text) titles.push(text.slice(0, 80));
+        }
+
+        const sampled = sample.length;
+        const linkRatio = links / sampled;
+        const imageRatio = images / sampled;
+        const priceRatio = prices / sampled;
+        const averageTextLength = Math.round(totalLength / sampled);
+
+        // Containers hold everything; single words hold nothing. Aim in between.
+        let lengthFactor = 1;
+        if (averageTextLength > 800) lengthFactor = 800 / averageTextLength;
+        else if (averageTextLength < 15) lengthFactor = Math.max(averageTextLength, 1) / 15;
+
+        const score =
+          Math.log10(nodes.length + 1) *
+          (0.4 * linkRatio + 0.3 * imageRatio + 0.3 * priceRatio) *
+          lengthFactor *
+          100;
+
+        if (score <= 0) continue;
+
+        suggestions.push({
+          selector,
+          count: nodes.length,
+          withLink: Math.round(linkRatio * 100),
+          withImage: Math.round(imageRatio * 100),
+          withPrice: Math.round(priceRatio * 100),
+          averageTextLength,
+          sampleTitles: titles,
+          score: Math.round(score * 10) / 10,
+        });
+      }
+
+      suggestions.sort((a, b) => b.score - a.score);
+
+      // 3) Structured product data is a useful fallback signal for the caller.
+      let jsonLdProducts = 0;
+      for (const script of Array.from(document.querySelectorAll('script[type="application/ld+json"]'))) {
+        const raw = script.textContent ?? "";
+        jsonLdProducts += (raw.match(/"@type"\s*:\s*"Product"/g) ?? []).length;
+      }
+
+      return { suggestions: suggestions.slice(0, 12), jsonLdProducts, totalElements: elements.length };
+    });
+
+    const best = analysis.suggestions[0];
+    let hint: string;
+    if (!best) {
+      hint =
+        "No repeating pattern found. The list is probably rendered after load — retry with " +
+        "`waitForSelector` set to something you can see in the page, or a longer `waitMs`. " +
+        "A consent/anti-bot wall would also produce this.";
+    } else if (best.score < 10) {
+      hint =
+        `Weak match ("${best.selector}", ${best.count} items). Check the sample texts below; if they are not ` +
+        "products, the page likely renders its list with JavaScript after load — add `scrollToBottom: true` " +
+        "and a `waitForSelector`.";
+    } else {
+      hint = `Try itemSelector "${best.selector}" (${best.count} items on this page).`;
+    }
+
+    return {
+      url: target,
+      finalUrl: page.url(),
+      title: await page.title(),
+      suggestions: analysis.suggestions,
+      jsonLdProducts: analysis.jsonLdProducts,
+      totalElements: analysis.totalElements,
+      hint,
       scrapedAt: new Date().toISOString(),
     };
   });

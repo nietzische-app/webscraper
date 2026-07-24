@@ -25,6 +25,7 @@ import {
   extractLeads,
   extractStructuredList,
   scrapePageText,
+  suggestItemSelectors,
   type FieldSpec,
 } from "./scraper.js";
 import { defaultOutputDir, exportData, type ExportFormat } from "./exporter.js";
@@ -44,7 +45,7 @@ const CORS_ORIGIN = process.env.SCRAPER_CORS_ORIGIN?.trim() || "*";
 /* Job store                                                                  */
 /* -------------------------------------------------------------------------- */
 
-export type JobType = "text" | "leads" | "list" | "images";
+export type JobType = "text" | "leads" | "list" | "images" | "inspect";
 export type JobStatus = "queued" | "running" | "done" | "error";
 
 interface Job {
@@ -147,7 +148,7 @@ const fieldSpecSchema = z.object({
 
 const scrapeSchema = z.object({
   url: z.string().min(1, "url is required"),
-  type: z.enum(["text", "leads", "list", "images"]),
+  type: z.enum(["text", "leads", "list", "images", "inspect"]),
   options: z
     .object({
       // shared navigation options
@@ -236,6 +237,7 @@ function jobSummary(job: Job): Record<string, unknown> {
     counts.found = Number(result.found ?? 0);
   }
   if (job.type === "text") counts.textLength = Number(result.textLength ?? 0);
+  if (job.type === "inspect") counts.suggestions = (result.suggestions as unknown[] | undefined)?.length ?? 0;
 
   return { ...base, counts };
 }
@@ -301,6 +303,8 @@ function runScrapeJob(type: JobType, url: string, options: z.infer<typeof scrape
           startPage: options.startPage,
           maxItems: options.maxItems,
         });
+    case "inspect":
+      return () => suggestItemSelectors(url, nav);
     case "images": {
       const folder = safeRelativeName(options.outputFolder ?? "", `images-${timestampSlug()}`);
       return () =>

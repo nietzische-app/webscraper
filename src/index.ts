@@ -20,6 +20,7 @@ import {
   extractLeads,
   extractStructuredList,
   scrapePageText,
+  suggestItemSelectors,
   type FieldSpec,
 } from "./scraper.js";
 import { defaultOutputDir, exportData, type ExportFormat } from "./exporter.js";
@@ -443,7 +444,55 @@ server.registerTool(
     }, "Lower `min_width`/`min_height` if the page only has small images, or use `list_only: true` to inspect what was found."),
 );
 
-/* --- 5. export_to_file ---------------------------------------------------- */
+/* --- 5. suggest_selectors ------------------------------------------------- */
+
+server.registerTool(
+  "suggest_selectors",
+  {
+    title: "Find the item selector for a listing page",
+    description:
+      "Inspect a listing page and report which repeating CSS patterns look like product/result items, ranked by " +
+      "how many carry a link, an image and a price. Use this when extract_list cannot auto-detect a selector, " +
+      "then pass the winning selector back as `item_selector`.",
+    inputSchema: {
+      url: z.string().describe("Listing / category / search results URL to inspect."),
+      ...navigationSchema,
+    },
+  },
+  async (args) =>
+    runTool(async () => {
+      const result = await suggestItemSelectors(args.url, navOptions(args));
+      const datasetId = datasets.save("suggest_selectors", result.finalUrl, result);
+
+      const lines = [
+        `🔍 ${result.finalUrl}`,
+        `Title: ${result.title || "(none)"}`,
+        result.jsonLdProducts > 0 ? `JSON-LD Product entries in the markup: ${result.jsonLdProducts}` : "",
+        `dataset_id: ${datasetId}`,
+        "",
+        `💡 ${result.hint}`,
+        "",
+      ].filter(Boolean);
+
+      if (result.suggestions.length === 0) {
+        lines.push("No repeating pattern scored above zero on this page.");
+      } else {
+        lines.push("Candidates (best first):", "");
+        for (const suggestion of result.suggestions.slice(0, 8)) {
+          lines.push(
+            `  ${suggestion.selector}  —  ${suggestion.count} items, score ${suggestion.score}`,
+            `      link ${suggestion.withLink}% · image ${suggestion.withImage}% · price ${suggestion.withPrice}% · ~${suggestion.averageTextLength} chars`,
+            ...suggestion.sampleTitles.map((title) => `      · ${title}`),
+            "",
+          );
+        }
+      }
+
+      return textResult(lines.join("\n"));
+    }, "If nothing scores well the list is probably rendered after load — retry with `scroll_to_bottom: true` or a `wait_for_selector`."),
+);
+
+/* --- 6. export_to_file ---------------------------------------------------- */
 
 server.registerTool(
   "export_to_file",
@@ -503,7 +552,7 @@ server.registerTool(
     }, "Use an absolute path if you want the file somewhere specific, and a .csv extension for spreadsheet output."),
 );
 
-/* --- 6. list_datasets ----------------------------------------------------- */
+/* --- 7. list_datasets ----------------------------------------------------- */
 
 server.registerTool(
   "list_datasets",

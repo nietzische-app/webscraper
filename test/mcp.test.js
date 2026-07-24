@@ -56,6 +56,7 @@ test("server advertises all tools", async () => {
     "extract_list",
     "list_datasets",
     "scrape_page",
+    "suggest_selectors",
   ]);
 
   const scrapePage = tools.find((tool) => tool.name === "scrape_page");
