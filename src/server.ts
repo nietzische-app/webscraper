@@ -562,7 +562,21 @@ if (isMain) {
       process.on("SIGINT", () => void shutdown());
       process.on("SIGTERM", () => void shutdown());
     })
-    .catch((error) => {
+    .catch((error: NodeJS.ErrnoException) => {
+      // Hitting an already-running copy of this app is the common case here,
+      // so say that instead of printing a bare listen() stack trace.
+      if (error?.code === "EADDRINUSE") {
+        console.error(
+          `\n⚠  Port ${PORT} is already in use.\n\n` +
+            "   Most likely this app is already running — check with:\n" +
+            "     systemctl status webscraper        (installed via deploy/install-systemd.sh)\n" +
+            `     ss -tlnp | grep :${PORT}                (which process holds the port)\n` +
+            `     curl -s localhost:${PORT}/api/health   (is it answering?)\n\n` +
+            `   If it is already up, there is nothing to start. To run a second copy anyway,\n` +
+            `   pick another port:  PORT=3060 npm run serve\n`,
+        );
+        process.exit(1);
+      }
       console.error("[web] failed to start:", error);
       process.exit(1);
     });
